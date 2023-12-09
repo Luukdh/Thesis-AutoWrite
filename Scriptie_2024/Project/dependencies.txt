@@ -1,0 +1,15 @@
+Python:
+- pyglet
+- ipykernel
+- matplotlib
+- torch
+- 
+
+- PyQT5
+- canberra-gtk-module
+
+- evdev
+
+Other:
+- Cudatoolkit
+- Cuda-drivers
