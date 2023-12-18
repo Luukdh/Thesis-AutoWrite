@@ -1,6 +1,7 @@
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -9,7 +10,8 @@ from PyQt5.QtWidgets import (
     QLabel,
     QVBoxLayout,
     QHBoxLayout,
-    QPushButton
+    QPushButton,
+    QMessageBox
 )
 
 from PyQt5.QtGui import (
@@ -33,14 +35,20 @@ This class creates a window that allows the user to record their own perfect alp
 '''
 class GetAlphabet(QMainWindow):
     """ Input widget. """
-    def __init__(self, width=1200, height=600):
+    def __init__(self, width=1200, height=600, alpha_type="normal", parent_window=None):
         """ Initializer. """
         super().__init__()
+        self.alpha_type = alpha_type
+        self.parent_window = parent_window
+
         self.setWindowTitle("Create the perfect Alphabet!")
         self.setGeometry(0, 0, width + 50, height + 100)
 
         self.explanation = QLabel()
-        self.explanation.setText("Draw the perfect alphabet!")
+        if type == "dirty":
+            self.explanation.setText("Draw a \"dirty\" alphabet!")
+        else:
+            self.explanation.setText("Draw the perfect alphabet!")
 
         self.clearButton = QPushButton("Clear")
         self.clearButton.setFixedSize(200, 40)
@@ -186,6 +194,10 @@ class GetAlphabet(QMainWindow):
         The stroke is added to the history.
         """
         if len(self.current_stroke) > 0:
+            m_stroke = self.find_median_coordinate(self.current_stroke)
+            if m_stroke[0] < 0 or m_stroke[1] < 0 or m_stroke[0] > 1200 or m_stroke[1] > 600:
+                print(f"Stroke is out of bounds.")
+                return
             self.history.append(self.current_stroke)
         else:
             return
@@ -227,24 +239,40 @@ class GetAlphabet(QMainWindow):
         self.clearCanvas()
         self.canvas_history = []
 
-    def interpolate(self, stroke, len):
+    def interpolate(self, stroke, length):
         '''
         This funtion takes a normal input stroke and returns a stroke 
         with the a contant length of "len" using linear interpolation.
         '''
         new_stroke = []
-        for i in np.linspace(0, len(stroke) - 1, len):
-            new_coord = stroke[int(i)] + (i - int(i)) * (stroke[int(i) + 1] - stroke[int(i)])
-            new_stroke.append(new_coord)
+        # print(stroke)
+        for i in np.linspace(0, len(stroke) - 1, length, endpoint=False):
+            new_x = stroke[int(i)][0] + (i - int(i)) * (stroke[int(i) + 1][0] - stroke[int(i)][0])
+            new_y = stroke[int(i)][1] + (i - int(i)) * (stroke[int(i) + 1][1] - stroke[int(i)][1])
+            new_p = stroke[int(i)][2]
+            new_stroke.append([int(new_x), int(new_y), new_p])
+        return new_stroke
+    
+    def normalize(self, stroke):
+        '''
+        This function takes a normal input stroke and normalizes these coordinates
+        to the middle of the roster square. 
+        '''
+        new_stroke = []
+        for i in range(len(stroke) - 1):
+            new_x = stroke[i][0] % 100 - 50
+            new_y = stroke[i][1] % 100 - 50
+            new_p = stroke[i][2]
+            new_stroke.append([int(new_x), int(new_y), new_p])
         return new_stroke
      
-    def resample(self, stroke, len):
+    def resample(self, stroke, length):
         '''
         This function takes a normal input stroke and resamples it to have a constant length
         of "len" by removing random points or duplicating random points using random sampling. 
         '''   
         new_stroke = []
-        for i in np.linspace(0, len(stroke) - 1, len):
+        for i in np.linspace(0, len(stroke) - 1, length):
             new_stroke.append(stroke[int(i)])
         return new_stroke
     
@@ -278,31 +306,54 @@ class GetAlphabet(QMainWindow):
             "M", "m", "N", "n", "O", "o", "P", "p", "Q", "q", "R", "r",
             "S", "s", "T", "t", "U", "u", "V", "v", "W", "w", "X", "x",
             "Y", "y", "Z", "z", "0", "1", "2", "3", "4", "5", "6", "7",
-            "8", "9", ".", ",", ";", ":", "!", "\"", "/", "?", "#", "(",
-            ")", "@"
+            "8", "9", ".", ",", ";", ":", "!", "\"", "/", "?", "#", "@"
         ]
         num_char = 12 * 6
-        self.characters = {}
+        if self.alpha_type == "dirty":
+            self.characters = self.parent_window.dirty_alphabet
+        else:
+            self.characters = self.parent_window.alphabet
         for i, stroke in enumerate(self.history):
             m_stroke = self.find_median_coordinate(stroke)
             index = self.find_coordinate_index(12, 100, 100, m_stroke)
-            self.characters[list_char[index]] = stroke
+            if list_char[index] in self.characters:
+                self.characters[list_char[index]].append(stroke)
+            else:
+                self.characters[list_char[index]] = [stroke]
 
         return self.characters
+    
+    def notFinishedDialog(self):
+        msg = QMessageBox()
+        msg.setWindowTitle("Not Finished!")
+        msg.setText("Please draw all characters!")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
 
     def saveEvent(self):
         """ Handles save events. """
+        stroke_len = 256
         if len(self.history) == 0:
             return
+        self.history = [self.interpolate(stroke, stroke_len) for stroke in self.history]
+
         ordered_characters = self.orderStrokes()
+        normalized_characters = {}
         for key, value in ordered_characters.items():
-            print(f"{key}: {value}\n\n")
-        m_len = 0
-        for stroke in self.history:
-            m_len += len(stroke)
-        m_len = m_len // len(self.history)
-        print(f"Average length: {m_len}")
-        # self.close()
+            normalized_characters[key] = [self.normalize(stroke) for stroke in value]
+
+        # if len(ordered_characters) != 72:
+        #     print("Please draw all characters!")
+        #     self.notFinishedDialog()
+        #     return
+
+        if self.alpha_type == "dirty":
+            self.parent_window.dirty_alphabet = normalized_characters
+        else:
+            self.parent_window.alphabet = normalized_characters
+        
+        self.close()
 
 
 class InputGUI(QMainWindow):
@@ -317,7 +368,14 @@ class InputGUI(QMainWindow):
         self.AlphaButton = QPushButton("Create Alphabet!")
         self.AlphaButton.setFixedSize(400, 80)
         self.AlphaButton.clicked.connect(self.create_alphabet)
-        
+
+        self.DirtyAlphaButton = QPushButton("Create \"Dirty\" Alphabet!")
+        self.DirtyAlphaButton.setFixedSize(400, 80)
+        self.DirtyAlphaButton.clicked.connect(self.create_dirty_alphabet)
+
+        self.SaveAlphaButton = QPushButton("Save Alphabets as Pickles.")
+        self.SaveAlphaButton.setFixedSize(400, 80)
+        self.SaveAlphaButton.clicked.connect(self.save_alphabet)
 
         self.centralWidget = QWidget()
         self.centralWidgetLayout = QVBoxLayout()
@@ -326,13 +384,46 @@ class InputGUI(QMainWindow):
             self.AlphaButton,
             alignment=QtCore.Qt.AlignCenter
         )
+        self.centralWidgetLayout.addWidget(
+            self.DirtyAlphaButton,
+            alignment=QtCore.Qt.AlignCenter
+        )
+        self.centralWidgetLayout.addWidget(
+            self.SaveAlphaButton,
+            alignment=QtCore.Qt.AlignCenter
+        )
         self.centralWidget.setLayout(self.centralWidgetLayout)
         self.setCentralWidget(self.centralWidget)
+
+        self.alphabet = {}
+        self.clicked = False
+        self.dirty_alphabet = {}
         
     def create_alphabet(self):
-        self.newWindow = GetAlphabet()
+        if self.clicked:
+            print("Last recorded alphabet deleted.")
+            self.alphabet = {}
+        self.clicked = True
+        self.newWindow = GetAlphabet(parent_window=self)
         self.newWindow.show()
+
+    def create_dirty_alphabet(self):
+        self.newWindow = GetAlphabet(parent_window=self, alpha_type="dirty")
+        self.newWindow.show()
+
+    def print_alphabet(self):
+        for key, value in self.alphabet.items():
+            print(f"{key}: {value}\n")
+
+    def save_alphabet(self):
+        with open("./data/other/alphabet.pkl", "wb") as f:
+            pickle.dump(self.alphabet, f)
+        with open("./data/other/dirty_alphabet.pkl", "wb") as f:
+            pickle.dump(self.dirty_alphabet, f)
+        print("Alphabets saved as pickles.")
+        self.print_alphabet()
     
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = InputGUI()
