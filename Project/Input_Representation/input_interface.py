@@ -245,7 +245,6 @@ class GetAlphabet(QMainWindow):
         with the a contant length of "len" using linear interpolation.
         '''
         new_stroke = []
-        # print(stroke)
         for i in np.linspace(0, len(stroke) - 1, length, endpoint=False):
             new_x = stroke[int(i)][0] + (i - int(i)) * (stroke[int(i) + 1][0] - stroke[int(i)][0])
             new_y = stroke[int(i)][1] + (i - int(i)) * (stroke[int(i) + 1][1] - stroke[int(i)][1])
@@ -258,10 +257,11 @@ class GetAlphabet(QMainWindow):
         This function takes a normal input stroke and normalizes these coordinates
         to the middle of the roster square. 
         '''
+        dx, dy = 50, 50
         new_stroke = []
-        for i in range(len(stroke) - 1):
-            new_x = stroke[i][0] % 100 - 50
-            new_y = stroke[i][1] % 100 - 50
+        for i in range(len(stroke)):
+            new_x = stroke[i][0] % 100 - dx
+            new_y = stroke[i][1] % 100 - dy
             new_p = stroke[i][2]
             new_stroke.append([int(new_x), int(new_y), new_p])
         return new_stroke
@@ -342,12 +342,14 @@ class GetAlphabet(QMainWindow):
         normalized_characters = {}
         for key, value in ordered_characters.items():
             normalized_characters[key] = [self.normalize(stroke) for stroke in value]
+         
+        # Create popup if not all characters are drawn.
+        if len(ordered_characters) != 72:
+            print("Please draw all characters!")
+            self.notFinishedDialog()
+            return
 
-        # if len(ordered_characters) != 72:
-        #     print("Please draw all characters!")
-        #     self.notFinishedDialog()
-        #     return
-
+        # Save the drawn alphabet.
         if self.alpha_type == "dirty":
             self.parent_window.dirty_alphabet = normalized_characters
         else:
@@ -421,7 +423,7 @@ class InputGUI(QMainWindow):
         with open("./data/other/dirty_alphabet.pkl", "wb") as f:
             pickle.dump(self.dirty_alphabet, f)
         print("Alphabets saved as pickles.")
-        self.print_alphabet()
+        # self.print_alphabet()
     
 
 if __name__ == "__main__":
