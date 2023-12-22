@@ -16,9 +16,11 @@ from PyQt5.QtWidgets import (
 
 from PyQt5.QtGui import (
     QPainter,
+    QPen,
     QColor,
     QPixmap,
-    QColor
+    QColor,
+    QBrush
 )
 import PyQt5.QtCore as QtCore
 from PyQt5.QtCore import (
@@ -42,6 +44,7 @@ class GetAlphabet(QMainWindow):
         self.parent_window = parent_window
 
         self.setWindowTitle("Create the perfect Alphabet!")
+        self.setFixedSize(width + 50, height + 100)
         self.setGeometry(0, 0, width + 50, height + 100)
 
         self.explanation = QLabel()
@@ -153,10 +156,8 @@ class GetAlphabet(QMainWindow):
 
     def tabletEvent(self, event):
         """ Handles tablet events. """
-        current_x = int(event.x() - self.canvas_offset_left -
-                self.cursor_offset_left)
-        current_y = int(event.y() - self.canvas_offset_top -
-                self.cursor_offset_top)
+        current_x = event.x() - self.canvas_offset_left - self.cursor_offset_left
+        current_y = event.y() - self.canvas_offset_top - self.cursor_offset_top
         
 
         if self.last_x is None: # First event.
@@ -166,7 +167,10 @@ class GetAlphabet(QMainWindow):
             return # Ignore the first time.
 
         painter = QPainter(self.widget.pixmap())
-        painter.drawLine(self.last_x, self.last_y, current_x, current_y)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(Qt.black))
+        painter.pen().setWidth(2)
+        painter.drawLine(int(self.last_x), int(self.last_y), int(current_x), int(current_y))
         painter.end()
         self.update()
 
@@ -193,12 +197,14 @@ class GetAlphabet(QMainWindow):
         If the mouse is released that means the end of the current stroke.
         The stroke is added to the history.
         """
-        if len(self.current_stroke) > 0:
-            m_stroke = self.find_median_coordinate(self.current_stroke)
-            if m_stroke[0] < 0 or m_stroke[1] < 0 or m_stroke[0] > 1200 or m_stroke[1] > 600:
+        np_stroke = np.array(self.current_stroke)
+        if np_stroke.size > 0:
+            median = np.median(np_stroke.T, axis=1)
+            if median[0] < 0 or median[1] < 0 or median[0] > 1200 or median[1] > 600:
                 print(f"Stroke is out of bounds.")
+                self.current_stroke = []
                 return
-            self.history.append(self.current_stroke)
+            self.history.append(np_stroke)
         else:
             return
 
@@ -244,27 +250,24 @@ class GetAlphabet(QMainWindow):
         This funtion takes a normal input stroke and returns a stroke 
         with the a contant length of "len" using linear interpolation.
         '''
-        new_stroke = []
-        for i in np.linspace(0, len(stroke) - 1, length, endpoint=False):
-            new_x = stroke[int(i)][0] + (i - int(i)) * (stroke[int(i) + 1][0] - stroke[int(i)][0])
-            new_y = stroke[int(i)][1] + (i - int(i)) * (stroke[int(i) + 1][1] - stroke[int(i)][1])
-            new_p = stroke[int(i)][2]
-            new_stroke.append([int(new_x), int(new_y), new_p])
-        return new_stroke
+        x, y, p = stroke
+        size = stroke.shape[1]
+        interp_x = np.interp(np.linspace(0, size, length, endpoint=True), np.arange(size), x)
+        interp_y = np.interp(np.linspace(0, size, length, endpoint=True), np.arange(size), y)
+        interp_p = np.interp(np.linspace(0, size, length, endpoint=True), np.arange(size), p)
+        return np.stack([interp_x, interp_y, interp_p], axis=0)
     
     def normalize(self, stroke):
         '''
         This function takes a normal input stroke and normalizes these coordinates
         to the middle of the roster square. 
         '''
-        dx, dy = 50, 50
-        new_stroke = []
-        for i in range(len(stroke)):
-            new_x = stroke[i][0] % 100 - dx
-            new_y = stroke[i][1] % 100 - dy
-            new_p = stroke[i][2]
-            new_stroke.append([int(new_x), int(new_y), new_p])
-        return new_stroke
+        # Find origin.
+        x, y = stroke[:-1, 0]
+        # Translate to origin.
+        arr_x = np.array([val - x for val in stroke[0]])
+        arr_y = np.array([val - y for val in stroke[1]])
+        return np.stack([arr_x, arr_y, stroke[2]], axis=0)
      
     def resample(self, stroke, length):
         '''
@@ -276,23 +279,13 @@ class GetAlphabet(QMainWindow):
             new_stroke.append(stroke[int(i)])
         return new_stroke
     
-    def find_median_coordinate(self, coordinates_list):
-        if not coordinates_list:
-            return None
-
-        # Transpose the coordinates list to separate x and y values
-        x_values, y_values, _ = zip(*coordinates_list)
-
-        # Calculate the median for each dimension
-        median_x = sorted(x_values)[len(x_values) // 2]
-        median_y = sorted(y_values)[len(y_values) // 2]
-
-        return [median_x, median_y]
-    
     def find_coordinate_index(self, len, width, height, coord):
-        x, y = coord
-        x_index = x // width
-        y_index = y // height
+        '''
+        Find the index of the character that represents the roster square.
+        '''
+        x, y, _ = coord
+        x_index = int(x) // width
+        y_index = int(y) // height
 
         return x_index + (y_index * len)
     
@@ -314,13 +307,14 @@ class GetAlphabet(QMainWindow):
         else:
             self.characters = self.parent_window.alphabet
         for i, stroke in enumerate(self.history):
-            m_stroke = self.find_median_coordinate(stroke)
-            index = self.find_coordinate_index(12, 100, 100, m_stroke)
-            if list_char[index] in self.characters:
-                self.characters[list_char[index]].append(stroke)
+            median = np.median(stroke, axis=1)
+            index = self.find_coordinate_index(12, 100, 100, median)
+            if list_char[index] not in self.characters:
+                self.characters[list_char[index]] = np.array([self.normalize(stroke)])
             else:
-                self.characters[list_char[index]] = [stroke]
-
+                char_strokes = self.characters[list_char[index]]
+                self.characters[list_char[index]] = np.append(char_strokes, [self.normalize(stroke)], axis=0)            
+        print(f"Characters: {self.characters}")
         return self.characters
     
     def notFinishedDialog(self):
@@ -336,24 +330,21 @@ class GetAlphabet(QMainWindow):
         stroke_len = 256
         if len(self.history) == 0:
             return
-        self.history = [self.interpolate(stroke, stroke_len) for stroke in self.history]
-
-        ordered_characters = self.orderStrokes()
-        normalized_characters = {}
-        for key, value in ordered_characters.items():
-            normalized_characters[key] = [self.normalize(stroke) for stroke in value]
-         
         # Create popup if not all characters are drawn.
-        if len(ordered_characters) != 72:
-            print("Please draw all characters!")
-            self.notFinishedDialog()
-            return
-
+        # if len(self.history) != 72:
+        #     print("Please draw all characters!")
+        #     self.notFinishedDialog()
+        #     return
+        # print(f"History1: {self.history}")
+        self.history = [self.interpolate(stroke.T, stroke_len) for stroke in self.history]
+        # print(f"History2: {self.history}")
+        ordered_characters = self.orderStrokes()
+        # print(f"Ordered characters: {ordered_characters}")
         # Save the drawn alphabet.
         if self.alpha_type == "dirty":
-            self.parent_window.dirty_alphabet = normalized_characters
+            self.parent_window.dirty_alphabet = ordered_characters
         else:
-            self.parent_window.alphabet = normalized_characters
+            self.parent_window.alphabet = ordered_characters
         
         self.close()
 

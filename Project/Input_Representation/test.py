@@ -14,7 +14,6 @@ def interpolate(stroke, length):
             new_stroke.append([new_x, new_y, new_p])
         return new_stroke
 
-# stroke = [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3]]
-# print(interpolate(stroke, 10))
+data = np.array([[1,2,3],[4,5,6],[7,8,9],[10,11,12]])
 
-print(715 % 100)
+print(np.median(data, axis=1))
