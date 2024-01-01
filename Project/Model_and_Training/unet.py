@@ -13,46 +13,46 @@ class UNet(nn.Module):
 
         # Encoder
         #input: 1x256x3
-        self.e11 = nn.Conv1d(3, 64, kernel_size=5, padding=2) # output: 1x256x64
-        self.e12 = nn.Conv1d(64, 64, kernel_size=5, padding=2) # output: 1x256x64
+        self.e11 = nn.Conv1d(3, 64, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x256x64
+        self.e12 = nn.Conv1d(64, 64, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x256x64
         self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2) # output: 1x128x64
 
         # input: 1x128x64
-        self.e21 = nn.Conv1d(64, 128, kernel_size=5, padding=2) # output: 1x128x128
-        self.e22 = nn.Conv1d(128, 128, kernel_size=5, padding=2) # output: 1x128x128
+        self.e21 = nn.Conv1d(64, 128, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x128x128
+        self.e22 = nn.Conv1d(128, 128, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x128x128
         self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2) # output: 1x64x128
 
         # input: 1x64x128
-        self.e31 = nn.Conv1d(128, 256, kernel_size=5, padding=2) # output: 1x64x256
-        self.e32 = nn.Conv1d(256, 256, kernel_size=5, padding=2) # output: 1x64x256
+        self.e31 = nn.Conv1d(128, 256, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x64x256
+        self.e32 = nn.Conv1d(256, 256, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x64x256
         self.pool3 = nn.MaxPool1d(kernel_size=2, stride=2) # output: 1x32x256
 
         # input: 1x32x256
-        self.e41 = nn.Conv1d(256, 512, kernel_size=5, padding=2) # output: 1x32x512
-        self.e42 = nn.Conv1d(512, 512, kernel_size=5, padding=2) # output: 1x32x512
+        self.e41 = nn.Conv1d(256, 512, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x32x512
+        self.e42 = nn.Conv1d(512, 512, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x32x512
         self.pool4 = nn.MaxPool1d(kernel_size=2, stride=2) # output: 1x16x512
 
         # input: 1x16x512
-        self.e51 = nn.Conv1d(512, 1024, kernel_size=5, padding=2) # output: 1x16x1024
-        self.e52 = nn.Conv1d(1024, 1024, kernel_size=5, padding=2) # output: 1x16x1024
+        self.e51 = nn.Conv1d(512, 1024, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x16x1024
+        self.e52 = nn.Conv1d(1024, 1024, kernel_size=3, padding=1, padding_mode='replicate') # output: 1x16x1024
 
 
         # Decoder
         self.upconv1 = nn.ConvTranspose1d(1024, 512, kernel_size=2, stride=2)
-        self.d11 = nn.Conv1d(1024, 512, kernel_size=5, padding=2)
-        self.d12 = nn.Conv1d(512, 512, kernel_size=5, padding=2)
+        self.d11 = nn.Conv1d(1024, 512, kernel_size=3, padding=1, padding_mode='replicate')
+        self.d12 = nn.Conv1d(512, 512, kernel_size=3, padding=1, padding_mode='replicate')
 
         self.upconv2 = nn.ConvTranspose1d(512, 256, kernel_size=2, stride=2)
-        self.d21 = nn.Conv1d(512, 256, kernel_size=5, padding=2)
-        self.d22 = nn.Conv1d(256, 256, kernel_size=5, padding=2)
+        self.d21 = nn.Conv1d(512, 256, kernel_size=3, padding=1, padding_mode='replicate')
+        self.d22 = nn.Conv1d(256, 256, kernel_size=3, padding=1, padding_mode='replicate')
 
         self.upconv3 = nn.ConvTranspose1d(256, 128, kernel_size=2, stride=2)
-        self.d31 = nn.Conv1d(256, 128, kernel_size=5, padding=2)
-        self.d32 = nn.Conv1d(128, 128, kernel_size=5, padding=2)
+        self.d31 = nn.Conv1d(256, 128, kernel_size=3, padding=1, padding_mode='replicate')
+        self.d32 = nn.Conv1d(128, 128, kernel_size=3, padding=1, padding_mode='replicate')
 
         self.upconv4 = nn.ConvTranspose1d(128, 64, kernel_size=2, stride=2)
-        self.d41 = nn.Conv1d(128, 64, kernel_size=5, padding=2)
-        self.d42 = nn.Conv1d(64, 64, kernel_size=5, padding=2)
+        self.d41 = nn.Conv1d(128, 64, kernel_size=3, padding=1, padding_mode='replicate')
+        self.d42 = nn.Conv1d(64, 64, kernel_size=3, padding=1, padding_mode='replicate')
 
         # Output layer
         self.outconv = nn.Conv1d(64, n_class, kernel_size=1)
