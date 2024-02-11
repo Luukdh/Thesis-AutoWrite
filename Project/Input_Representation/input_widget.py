@@ -117,7 +117,7 @@ class InputWindow(QMainWindow):
         else:
             self.explanation.setText("Draw the perfect alphabet!")
 
-        self.setStyleSheet("InputWidget {background-image: url(./images/alpha.png);\
+        self.setStyleSheet("InputWidget {background-image: url(./images/honey_final.png);\
                             background-repeat: no-repeat; background-position: center;}")
 
     def initialize_offsets(self):
@@ -140,9 +140,12 @@ class InputWindow(QMainWindow):
 
     def tabletEvent(self, event):
         """ Handles tablet events. """
-        current_x = event.x() - self.canvas_offset_left - self.cursor_offset_left
-        current_y = event.y() - self.canvas_offset_top - self.cursor_offset_top
-        
+        current_x = event.posF().x() - self.canvas_offset_left - self.cursor_offset_left
+        current_y = event.posF().y() - self.canvas_offset_top - self.cursor_offset_top
+
+        if current_x < 0 or current_y < 0 or current_x > 1200 or current_y > 600:
+            print(f"point is out of bounds.")
+            return
 
         if self.last_x is None: # First event.
             self.last_x = current_x
@@ -169,6 +172,8 @@ class InputWindow(QMainWindow):
                     self.last_p
                 ]
         )
+        # Accepting the event causes malfunction.
+        # event.accept()
     
     def eraseLastStroke(self):
         """ Erases the last stroke. """
@@ -202,18 +207,6 @@ class InputWindow(QMainWindow):
         interp_y = np.interp(np.linspace(0, size, length, endpoint=True), np.arange(size), y)
         interp_p = np.interp(np.linspace(0, size, length, endpoint=True), np.arange(size), p)
         return np.stack([interp_x, interp_y, interp_p], axis=0)
-    
-    def normalize(self, stroke):
-        '''
-        This function takes a normal input stroke and normalizes these coordinates
-        to the middle of the roster square. 
-        '''
-        # Find origin.
-        x, y = stroke[:-1, 0]
-        # Translate to origin.
-        arr_x = np.array([val - x for val in stroke[0]])
-        arr_y = np.array([val - y for val in stroke[1]])
-        return np.stack([arr_x, arr_y, stroke[2]], axis=0)
 
 
 class NormalInputWindow(InputWindow):
@@ -225,7 +218,19 @@ class NormalInputWindow(InputWindow):
         self.canvas_offset_left =(self.widget.width() -
                 self.widget.pixmap().width())/2
         self.canvas_offset_top =(self.widget.height() -
-                self.widget.pixmap().height())/2    
+                self.widget.pixmap().height())/2  
+
+    def normalize(self, stroke):
+        '''
+        This function takes a normal input stroke and normalizes these coordinates
+        to the middle of the roster square. 
+        '''
+        # Find median.
+        x, y = np.median(stroke[:-1], axis=1)
+        # Translate to origin.
+        arr_x = np.array([val - x for val in stroke[0]])
+        arr_y = np.array([val - y for val in stroke[1]])
+        return np.stack([arr_x, arr_y, stroke[2]], axis=0) 
 
 
 class AlphaInputWindow(InputWindow):
@@ -243,18 +248,37 @@ class AlphaInputWindow(InputWindow):
             alignment=QtCore.Qt.AlignRight
         )
 
+    def normalize(self, stroke):
+        '''
+        This function takes a normal input stroke and normalizes these coordinates
+        to the base line of the roster square or the median of the stroke. 
+        '''
+        # Find the median of the stroke.
+        median = np.median(stroke[:-1], axis=1)
+        if self.alpha_type == "dirty":
+            # Normalization point is the median of the stroke.
+            x, y = median
+        else:
+            # Normalization point is the base line of the square.
+            x = (median[0] // 100) * 100 + 50
+            y = (median[1] // 100) * 100 + 70
+        # Translate to origin.
+        arr_x = np.array([val - x for val in stroke[0]])
+        arr_y = np.array([val - y for val in stroke[1]])
+        return np.stack([arr_x, arr_y, stroke[2]], axis=0)
+
     def mouseReleaseEvent(self, event):
         """
         If the mouse is released that means the end of the current stroke.
         The stroke is added to the history.
         """
+        out_of_bounds = False
         np_stroke = np.array(self.current_stroke)
         if np_stroke.size > 0:
             median = np.median(np_stroke.T, axis=1)
             if median[0] < 0 or median[1] < 0 or median[0] > 1200 or median[1] > 600:
                 print(f"Stroke is out of bounds.")
-                self.current_stroke = []
-                return
+                out_of_bounds = True
             self.history.append(np_stroke)
         else:
             return
@@ -262,9 +286,13 @@ class AlphaInputWindow(InputWindow):
         self.current_stroke = []
         self.last_x = None
         self.last_y = None
+        self.last_p = None
 
         new_pixmap = self.widget.pixmap().copy()
         self.canvas_history.append(new_pixmap)
+
+        if out_of_bounds:
+            self.undoEvent()
 
     def find_coordinate_index(self, len, width, height, coord):
         '''
@@ -318,10 +346,10 @@ class AlphaInputWindow(InputWindow):
         if len(self.history) == 0:
             return
         # Create popup if not all characters are drawn.
-        # if len(self.history) != 72:
-        #     print("Please draw all characters!")
-        #     self.notFinishedDialog()
-        #     return
+        if len(self.history) < 72:
+            print("Please draw all characters!")
+            self.notFinishedDialog()
+            return
         
         # Interpolate the strokes to have a constant length.
         self.history = [self.interpolate(stroke.T, stroke_len) for stroke in self.history]
@@ -340,7 +368,7 @@ class InputGUI(QMainWindow):
         self.setWindowTitle("AutoWrite")
         self.setGeometry(0, 0, 800, 600)
 
-        self.setStyleSheet("background-color: rgb(50, 200, 100);")
+        self.setStyleSheet("background-color: rgb(200, 200, 200);")
         
         self.AlphaButton = QPushButton("Create Alphabet!")
         self.AlphaButton.setFixedSize(400, 80)
